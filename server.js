@@ -8,25 +8,34 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'alpha_tech_secret_key';
 
+// --- Add this near the top to see when the app starts handling requests ---
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] Incoming request: ${req.method} ${req.url}`);
+  next();
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection with better error handling
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/alphatech';
+console.log(`[${new Date().toISOString()}] MONGODB_URI loaded from environment:`, !!process.env.MONGODB_URI);
+console.log(`[${new Date().toISOString()}] Attempting to connect to MongoDB Atlas...`);
+
 mongoose.connect(MONGODB_URI, {
   serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
 })
 .then(() => {
-  console.log('Connected to MongoDB successfully');
-  
-  // Initialize admin count after successful connection
+  console.log(`[${new Date().toISOString()}] ✅ SUCCESS: Connected to MongoDB Atlas`);
+  console.log(`[${new Date().toISOString()}] Calling initializeAdminCount...`);
   initializeAdminCount();
+  console.log(`[${new Date().toISOString()}] Returned from initializeAdminCount call.`);
 })
 .catch(err => {
-  console.error('MongoDB connection error:', err);
-  console.log('Please make sure MongoDB is installed and running on your system');
-  console.log('For production, make sure MONGODB_URI environment variable is set');
+  console.error(`[${new Date().toISOString()}] ❌ FAILED: MongoDB connection error:`, err);
+  console.log(`[${new Date().toISOString()}] Please make sure MongoDB is installed and running on your system`);
+  console.log(`[${new Date().toISOString()}] For production, make sure MONGODB_URI environment variable is set`);
 });
 
 // User Schema
@@ -57,15 +66,24 @@ const AdminCount = mongoose.model('AdminCount', countSchema);
 
 // Initialize admin count if not exists
 async function initializeAdminCount() {
+  console.log(`[${new Date().toISOString()}] -> Inside initializeAdminCount function`);
   try {
+    console.log(`[${new Date().toISOString()}] -> About to call AdminCount.findOne()`);
     const count = await AdminCount.findOne();
+    console.log(`[${new Date().toISOString()}] -> AdminCount.findOne() returned:`, count !== null ? `Found document with count: ${count.count}` : "No document found");
     if (!count) {
+      console.log(`[${new Date().toISOString()}] -> Creating initial AdminCount document...`);
       await AdminCount.create({ count: 0 });
-      console.log('Admin count initialized');
+      console.log(`[${new Date().toISOString()}] -> Admin count initialized to 0`);
+    } else {
+      console.log(`[${new Date().toISOString()}] -> Admin count already exists with value:`, count.count);
     }
   } catch (error) {
-    console.error('Error initializing admin count:', error);
+    console.error(`[${new Date().toISOString()}] -> ERROR in initializeAdminCount:`, error.message);
+    // Optionally log the full error stack if needed for debugging
+    console.error(error);
   }
+  console.log(`[${new Date().toISOString()}] <- Exiting initializeAdminCount function`);
 }
 
 // Authentication Middleware
@@ -86,28 +104,36 @@ const authenticateToken = (req, res, next) => {
 
 // Simple test route
 app.get('/', (req, res) => {
+  console.log(`[${new Date().toISOString()}] -> Handling GET / request`);
   res.json({ message: 'Alpha Tech Management System API' });
 });
 
 // Setup route to create initial users
 app.get('/setup', async (req, res) => {
+  console.log(`[${new Date().toISOString()}] -> Handling /setup request`);
   try {
-    // Check if users already exist
+    console.log(`[${new Date().toISOString()}] -> About to call User.countDocuments()`);
     const existingUsers = await User.countDocuments();
+    console.log(`[${new Date().toISOString()}] -> User.countDocuments() returned:`, existingUsers);
+
     if (existingUsers > 0) {
+      console.log(`[${new Date().toISOString()}] <- /setup: Users already exist`);
       return res.json({ message: 'Users already exist' });
     }
-    
+
+    console.log(`[${new Date().toISOString()}] -> /setup: Creating initial users...`);
     const adminPassword = await bcrypt.hash('admin777', 10);
     const facilitatorPassword = await bcrypt.hash('facil456', 10);
-    
+
     await User.create([
       { username: 'admin', password: adminPassword, role: 'admin' },
       { username: 'facilitator', password: facilitatorPassword, role: 'facilitator' }
     ]);
-    
+
+    console.log(`[${new Date().toISOString()}] <- /setup: Users created successfully!`);
     res.json({ message: 'Users created successfully! You can now login with admin/admin777 or facilitator/facil456' });
   } catch (error) {
+    console.error(`[${new Date().toISOString()}] -> ERROR in /setup route:`, error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -222,6 +248,6 @@ app.get('/api/admin-count', authenticateToken, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Alpha Tech Server running on port ${PORT}`);
-  console.log('Visit http://localhost:5000/setup to create initial users (for local development)');
+  console.log(`[${new Date().toISOString()}] Alpha Tech Server running on port ${PORT}`);
+  console.log(`[${new Date().toISOString()}] Visit http://localhost:5000/setup to create initial users (for local development)`);
 });
